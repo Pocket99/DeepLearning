@@ -9,7 +9,6 @@ import torch.nn as nn
 from PIL import Image
 from skimage import exposure
 # 图片预处理
-
 def adapthist_equalize(img):
     img = np.array(img) # Convert PIL image to numpy array
     img = exposure.equalize_adapthist(img/np.max(img)) # Apply histogram equalization
@@ -30,6 +29,7 @@ def img_preprocess(img_in):
     img = transform(img)
     img = img.unsqueeze(0)					# 3
     return img
+
 
 # 定义获取梯度的函数
 def backward_hook(module, grad_in, grad_out):
@@ -54,7 +54,7 @@ def cam_show_img(img, feature_map, grads, out_dir):
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     print("heatmap.shape: ", heatmap.shape)
     cam_img = 0.3 * heatmap + 0.7 * img
-    path_cam_img = os.path.join(out_dir, "cam_SGD_BCE_loss_epoch_50_test.jpg")
+    path_cam_img = os.path.join(out_dir, "cam_resnet34_adam_BCE_loss_epoch_25.jpg")
     cv2.imwrite(path_cam_img, cam_img)
 
 if __name__ == '__main__':
@@ -82,20 +82,23 @@ if __name__ == '__main__':
     img_input = img_preprocess(img)
 
     # 加载 squeezenet1_1 预训练模型
-    net = models.vgg16(pretrained=True)
-    num_features = net.classifier[6].in_features
-    #net.classifier[6] = nn.Linear(num_features, 2)
-    net.classifier[-1] = nn.Linear(in_features=4096, out_features=1, bias=True)
-    net.classifier[-2] = nn.ReLU(inplace=False) # Add ReLU activation after the new linear layer
+    # net = models.vgg16(pretrained=True)
+    # num_features = net.classifier[6].in_features
+    # #net.classifier[6] = nn.Linear(num_features, 2)
+    # net.classifier[-1] = nn.Linear(in_features=4096, out_features=1, bias=True)
+    # net.classifier[-2] = nn.ReLU(inplace=False) # Add ReLU activation after the new linear layer
+    net = torch.hub.load('pytorch/vision:v0.10.0', 'resnet34', pretrained=True)
+    num_ftrs = net.fc.in_features
+    net.fc = nn.Linear(num_ftrs, 1)
     #pthfile = 'models/pneumothorax_experiment_VGG16_8_grad_cam_L2_1e-3_epoch20_20.pth'
-    pthfile = '/home/ziruiqiu/comp691_DL/project/models/pneumothorax_experiment_VGG16_11_epoch50_SGD_BCE50.pth' #BCE
+    pthfile = '/home/ziruiqiu/comp691_DL/project/models/pneumothorax_experiment_Resnet34_1_epoch25_Adam_BCELoss25.pth' #BCE
     net.load_state_dict(torch.load(pthfile))
     net.eval()														# 8
     print(net)
 
     # 注册hook
-    net.features[-1].register_forward_hook(farward_hook)	# 9
-    net.features[-1].register_backward_hook(backward_hook)
+    net._modules.get('layer4').register_forward_hook(farward_hook)	# 9
+    net._modules.get('layer4').register_backward_hook(backward_hook)
 
     # forward
     print("input:", img_input.shape)

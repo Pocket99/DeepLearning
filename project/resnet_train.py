@@ -153,7 +153,7 @@ test_transforms = transforms.Compose([
 df = pd.read_csv('data/stage_2_train.csv')
 
 # Split the data into train and validation sets
-train_df, temp_df = train_test_split(df, test_size=0.4, random_state=42)
+train_df, temp_df = train_test_split(df, test_size=0.2, random_state=42)
 val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
 
 # Create train and validation datasets and data loaders
@@ -161,16 +161,18 @@ train_dataset = PneumothoraxDataset(train_df, transform=train_transforms)
 val_dataset = PneumothoraxDataset(val_df, transform=val_transforms)
 test_dataset = PneumothoraxDataset(test_df, transform=test_transforms)
 
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, num_workers=4)
-test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=12, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=12, shuffle=True, num_workers=4)
+test_loader = DataLoader(test_dataset, batch_size=12, shuffle=True, num_workers=4)
 
-model = models.vgg16(pretrained=True)
+model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet34', pretrained=True)
+num_ftrs = model.fc.in_features
+model.fc = nn.Linear(num_ftrs, 1)
 # CE
 # num_features = model.classifier[6].in_features 
 # model.classifier[6] = nn.Linear(num_features, 2)
 # BCE
-model.classifier[-1] = nn.Linear(in_features=4096, out_features=1, bias=True)
+#model.classifier[-1] = nn.Linear(in_features=4096, out_features=1, bias=True)
 #model.classifier[-2] = nn.ReLU(inplace=False) # Add ReLU activation after the new linear layer
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -184,15 +186,14 @@ criterion = nn.BCEWithLogitsLoss()
 #criterion = nn.BCELoss()
 #criterion = FocalLoss(2)
 #optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
-#optimizer = optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-3)
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
 scheduler = ReduceLROnPlateau(optimizer, 'max', factor=0.1, patience=3)
 
-writer = SummaryWriter('runs/pneumothorax_experiment_VGG16_12_epoch50_Adam_BCELoss_scheduler')
+writer = SummaryWriter('runs/pneumothorax_experiment_Resnet34_1_epoch25_Adam_BCELoss')
 
 
 print("Starting training...")
-num_epochs = 50
+num_epochs = 25
 
 for epoch in range(num_epochs):
     model.train()
@@ -244,7 +245,7 @@ for epoch in range(num_epochs):
     writer.add_scalars("Loss", {"Train": train_loss, "Validation": val_loss}, epoch)
 
 # Save the model
-torch.save(model.state_dict(), f"models/pneumothorax_experiment_VGG16_12_epoch50_Adam_BCELoss_scheduler{epoch + 1}.pth")
+torch.save(model.state_dict(), f"models/pneumothorax_experiment_Resnet34_1_epoch25_Adam_BCELoss{epoch + 1}.pth")
 
 # Test loop
 model.eval()
