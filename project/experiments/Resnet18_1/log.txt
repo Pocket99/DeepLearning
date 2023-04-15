@@ -1,0 +1,64 @@
+Starting training...
+Epoch 1/20, Train Loss: 0.4824
+Epoch 1/20, Val Loss: 0.5183, Val Accuracy: 66.40%
+Val AUC: 0.8827
+Epoch 2/20, Train Loss: 0.1920
+Epoch 2/20, Val Loss: 0.4841, Val Accuracy: 81.30%
+Val AUC: 0.8904
+Epoch 3/20, Train Loss: 0.0447
+Epoch 3/20, Val Loss: 0.4729, Val Accuracy: 83.10%
+Val AUC: 0.9155
+Epoch 4/20, Train Loss: 0.0095
+Epoch 4/20, Val Loss: 0.4927, Val Accuracy: 83.70%
+Val AUC: 0.9156
+Epoch 5/20, Train Loss: 0.0039
+Epoch 5/20, Val Loss: 0.5148, Val Accuracy: 83.80%
+Val AUC: 0.9173
+Epoch 6/20, Train Loss: 0.0024
+Epoch 6/20, Val Loss: 0.5215, Val Accuracy: 83.00%
+Val AUC: 0.9175
+Epoch 7/20, Train Loss: 0.0024
+Epoch 7/20, Val Loss: 0.5273, Val Accuracy: 83.00%
+Val AUC: 0.9178
+Epoch 8/20, Train Loss: 0.0027
+Epoch 8/20, Val Loss: 0.5177, Val Accuracy: 83.50%
+Val AUC: 0.9176
+Epoch 9/20, Train Loss: 0.0022
+Epoch 9/20, Val Loss: 0.5199, Val Accuracy: 83.60%
+Val AUC: 0.9176
+Epoch 10/20, Train Loss: 0.0021
+Epoch 10/20, Val Loss: 0.5263, Val Accuracy: 83.30%
+Val AUC: 0.9176
+Epoch 11/20, Train Loss: 0.0019
+Epoch 11/20, Val Loss: 0.5265, Val Accuracy: 83.20%
+Val AUC: 0.9177
+Epoch 12/20, Train Loss: 0.0020
+Epoch 12/20, Val Loss: 0.5355, Val Accuracy: 83.30%
+Val AUC: 0.9179
+Epoch 13/20, Train Loss: 0.0021
+Epoch 13/20, Val Loss: 0.5303, Val Accuracy: 83.40%
+Val AUC: 0.9177
+Epoch 14/20, Train Loss: 0.0020
+Epoch 14/20, Val Loss: 0.5255, Val Accuracy: 83.30%
+Val AUC: 0.9176
+Epoch 15/20, Train Loss: 0.0019
+Epoch 15/20, Val Loss: 0.5263, Val Accuracy: 83.70%
+Val AUC: 0.9176
+Epoch 16/20, Train Loss: 0.0020
+Epoch 16/20, Val Loss: 0.5249, Val Accuracy: 83.10%
+Val AUC: 0.9177
+Epoch 17/20, Train Loss: 0.0021
+Epoch 17/20, Val Loss: 0.5221, Val Accuracy: 83.30%
+Val AUC: 0.9177
+Epoch 18/20, Train Loss: 0.0020
+Epoch 18/20, Val Loss: 0.5183, Val Accuracy: 83.60%
+Val AUC: 0.9175
+Epoch 19/20, Train Loss: 0.0019
+Epoch 19/20, Val Loss: 0.5338, Val Accuracy: 83.30%
+Val AUC: 0.9177
+Epoch 20/20, Train Loss: 0.0022
+Epoch 20/20, Val Loss: 0.5276, Val Accuracy: 83.30%
+Val AUC: 0.9177
+Test Loss: 0.4995
+Test Accuracy: 84.10%
+Val AUC: 0.9226

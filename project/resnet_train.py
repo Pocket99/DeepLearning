@@ -21,12 +21,12 @@ from PIL import Image
 import  gc
 import torchvision.utils as vutils
 from torch.autograd import Variable
+from sklearn.metrics import roc_auc_score, roc_curve
+import matplotlib.pyplot as plt
 gc.collect()
 torch.cuda.empty_cache()
 
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-from PIL import Image
+
 class FocalLoss(nn.Module):
     r"""
         This criterion is a implemenation of Focal Loss, which is proposed in 
@@ -111,7 +111,20 @@ class PneumothoraxDataset(Dataset):
         if self.transform:
             img = self.transform(img)
         return {"image": img, "label": label}
-    
+
+from PIL import ImageEnhance, ImageOps, ImageFilter
+
+class RandomBlur:
+    def __init__(self, radius_range=(0.1, 2.0)):
+        self.radius_range = radius_range
+
+    def __call__(self, img):
+        img = Image.fromarray(np.uint8(img))
+        radius = torch.rand(1).item() * (self.radius_range[1] - self.radius_range[0]) + self.radius_range[0]
+        img = img.filter(ImageFilter.GaussianBlur(radius))
+        return np.array(img)
+
+
 def hist_equalize(img):
     img = np.array(img) # Convert PIL image to numpy array
     img = exposure.equalize_adapthist(img/np.max(img)) # Apply histogram equalization
@@ -126,46 +139,39 @@ def adapthist_equalize(img):
 
 train_transforms = transforms.Compose([
     transforms.Resize((224, 224)),
-    # transforms.RandomHorizontalFlip(),
-    # transforms.RandomVerticalFlip(),
     transforms.Lambda(lambda x: adapthist_equalize(x)),
     transforms.ToTensor(),
-    
-    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 val_transforms = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.Lambda(lambda x: adapthist_equalize(x)),
     transforms.ToTensor(),
-    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 test_transforms = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.Lambda(lambda x: adapthist_equalize(x)),
     transforms.ToTensor(),
-    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 
 # Load the CSV file
-df = pd.read_csv('data/stage_2_train.csv')
+train_df = pd.read_csv('train.csv')
+val_df = pd.read_csv('valid.csv')
+test_df = pd.read_csv('test.csv')
 
-# Split the data into train and validation sets
-train_df, temp_df = train_test_split(df, test_size=0.2, random_state=42)
-val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
 
 # Create train and validation datasets and data loaders
 train_dataset = PneumothoraxDataset(train_df, transform=train_transforms)
 val_dataset = PneumothoraxDataset(val_df, transform=val_transforms)
 test_dataset = PneumothoraxDataset(test_df, transform=test_transforms)
 
-train_loader = DataLoader(train_dataset, batch_size=12, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=12, shuffle=True, num_workers=4)
-test_loader = DataLoader(test_dataset, batch_size=12, shuffle=True, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, num_workers=4)
+test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True, num_workers=4)
 
-model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet34', pretrained=True)
+model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet101', pretrained=True)
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, 1)
 # CE
@@ -187,13 +193,13 @@ criterion = nn.BCEWithLogitsLoss()
 #criterion = FocalLoss(2)
 #optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
-scheduler = ReduceLROnPlateau(optimizer, 'max', factor=0.1, patience=3)
+scheduler = ReduceLROnPlateau(optimizer,'max' ,factor=0.1, patience=3)
 
-writer = SummaryWriter('runs/pneumothorax_experiment_Resnet34_1_epoch25_Adam_BCELoss')
-
+writer = SummaryWriter('experiments/Resnet101_1')
+#writer = SummaryWriter('runs/test')
 
 print("Starting training...")
-num_epochs = 25
+num_epochs = 20
 
 for epoch in range(num_epochs):
     model.train()
@@ -223,6 +229,8 @@ for epoch in range(num_epochs):
     running_loss = 0.0
     correct = 0
     total = 0
+    pred_probs = []
+    true_labels = []
     with torch.no_grad():
         for batch_idx, data in enumerate(val_loader):
             inputs = data['image'].to(device)
@@ -232,6 +240,10 @@ for epoch in range(num_epochs):
             loss = criterion(outputs, labels)
             running_loss += loss.item()
 
+            predicted_probs = torch.sigmoid(outputs) # Convert to probability values
+            pred_probs.extend(predicted_probs.cpu().detach().numpy())
+            true_labels.extend(labels.cpu().detach().numpy())
+
             #_, predicted = torch.max(outputs.data, 1)
             predicted = (outputs > 0.5).float()
             total += labels.size(0)
@@ -240,27 +252,35 @@ for epoch in range(num_epochs):
     val_loss = running_loss / len(val_loader)
     val_accuracy = 100 * correct / total
     print(f"Epoch {epoch + 1}/{num_epochs}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy:.2f}%")
-
+    # Calculate ROC/AUC
+    fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+    roc_auc = roc_auc_score(true_labels, pred_probs)
+    print(f"Val AUC: {roc_auc:.4f}")
     # Write to TensorBoard
     writer.add_scalars("Loss", {"Train": train_loss, "Validation": val_loss}, epoch)
 
 # Save the model
-torch.save(model.state_dict(), f"models/pneumothorax_experiment_Resnet34_1_epoch25_Adam_BCELoss{epoch + 1}.pth")
+torch.save(model.state_dict(), f"models/resnet/resnet101_1.pth")
 
 # Test loop
 model.eval()
 test_running_loss = 0.0
 correct = 0
 total = 0
+pred_probs = []
+true_labels = []
 with torch.no_grad():
     for batch_idx, data in enumerate(test_loader):
         images, labels = data["image"].to(device), data["label"].to(device)
         labels = labels.view(-1, 1).float()  # Reshape label tensor to have shape (64, 1)
         outputs = model(images)
         loss = criterion(outputs, labels)
-        
         test_running_loss += loss.item()
         
+        predicted_probs = torch.sigmoid(outputs) # Convert to probability values
+        pred_probs.extend(predicted_probs.cpu().detach().numpy())
+        true_labels.extend(labels.cpu().detach().numpy())
+
         # Calculate accuracy
         #_, predicted = torch.max(outputs.data, 1)
         predicted = (outputs > 0.5).float()
@@ -272,4 +292,20 @@ test_accuracy = 100 * correct / total
 print(f"Test Loss: {test_loss:.4f}")
 print(f"Test Accuracy: {test_accuracy:.2f}%")
 
+# Calculate ROC/AUC
+fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+roc_auc = roc_auc_score(true_labels, pred_probs)
+print(f"Val AUC: {roc_auc:.4f}")
 
+# Plot ROC curve
+
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.show()

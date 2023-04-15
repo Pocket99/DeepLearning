@@ -18,8 +18,8 @@ def adapthist_equalize(img):
 
 def img_preprocess(img_in):
     img = img_in.copy()						
-    img = img[::-1, :, :]   				# 1
-    img = np.ascontiguousarray(img)			# 2
+    img = img[::-1, :, :]   				# 1 read in RGB oreder
+    img = np.ascontiguousarray(img)			# 2 contiguous in memory
     #print("img.shape: ", img.shape)
     cv2.resize(img, (224, 224))
     transform = transforms.Compose([
@@ -54,15 +54,15 @@ def cam_show_img(img, feature_map, grads, out_dir):
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     print("heatmap.shape: ", heatmap.shape)
     cam_img = 0.3 * heatmap + 0.7 * img
-    path_cam_img = os.path.join(out_dir, "cam_SGD_BCE_loss_epoch_50_test.jpg")
+    path_cam_img = os.path.join(out_dir, "cam_normal.jpg")
     cv2.imwrite(path_cam_img, cam_img)
 
 if __name__ == '__main__':
-    path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.3678.1517875178.953520.png' # pneumothorax
-    #path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.4200.1517875181.692066.png' # 0
+    #path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.3678.1517875178.953520.png' # pneumothorax
+    path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.4200.1517875181.692066.png' # 0
 
     json_path = 'labels.json'
-    output_dir = 'cam'
+    output_dir = '/home/ziruiqiu/comp691_DL/project/experiments/VGG16_1'
 
     with open(json_path, 'r') as load_f:
         load_json = json.load(load_f)
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     net.classifier[-1] = nn.Linear(in_features=4096, out_features=1, bias=True)
     net.classifier[-2] = nn.ReLU(inplace=False) # Add ReLU activation after the new linear layer
     #pthfile = 'models/pneumothorax_experiment_VGG16_8_grad_cam_L2_1e-3_epoch20_20.pth'
-    pthfile = '/home/ziruiqiu/comp691_DL/project/models/pneumothorax_experiment_VGG16_11_epoch50_SGD_BCE50.pth' #BCE
+    pthfile = '/home/ziruiqiu/comp691_DL/project/models/VGG16_1.pth' #BCE
     net.load_state_dict(torch.load(pthfile))
     net.eval()														# 8
     print(net)

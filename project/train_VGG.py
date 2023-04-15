@@ -23,10 +23,11 @@ import torchvision.utils as vutils
 from torch.autograd import Variable
 gc.collect()
 torch.cuda.empty_cache()
-
+from sklearn.metrics import roc_auc_score, roc_curve
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
+import matplotlib.pyplot as plt
 class FocalLoss(nn.Module):
     r"""
         This criterion is a implemenation of Focal Loss, which is proposed in 
@@ -150,12 +151,9 @@ test_transforms = transforms.Compose([
 
 
 # Load the CSV file
-df = pd.read_csv('data/stage_2_train.csv')
-
-# Split the data into train and validation sets
-train_df, temp_df = train_test_split(df, test_size=0.4, random_state=42)
-val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
-
+train_df = pd.read_csv('train.csv')
+val_df = pd.read_csv('valid.csv')
+test_df = pd.read_csv('test.csv')
 # Create train and validation datasets and data loaders
 train_dataset = PneumothoraxDataset(train_df, transform=train_transforms)
 val_dataset = PneumothoraxDataset(val_df, transform=val_transforms)
@@ -188,11 +186,11 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0001)
 scheduler = ReduceLROnPlateau(optimizer, 'max', factor=0.1, patience=3)
 
-writer = SummaryWriter('runs/pneumothorax_experiment_VGG16_12_epoch50_Adam_BCELoss_scheduler')
-
+#writer = SummaryWriter('runs/pneumothorax_experiment_VGG16_12_epoch50_Adam_BCELoss_scheduler')
+writer = SummaryWriter('experiments/VGG16_1')
 
 print("Starting training...")
-num_epochs = 50
+num_epochs = 20
 
 for epoch in range(num_epochs):
     model.train()
@@ -222,6 +220,8 @@ for epoch in range(num_epochs):
     running_loss = 0.0
     correct = 0
     total = 0
+    pred_probs = []
+    true_labels = []
     with torch.no_grad():
         for batch_idx, data in enumerate(val_loader):
             inputs = data['image'].to(device)
@@ -230,7 +230,9 @@ for epoch in range(num_epochs):
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             running_loss += loss.item()
-
+            predicted_probs = torch.sigmoid(outputs) # Convert to probability values
+            pred_probs.extend(predicted_probs.cpu().detach().numpy())
+            true_labels.extend(labels.cpu().detach().numpy())
             #_, predicted = torch.max(outputs.data, 1)
             predicted = (outputs > 0.5).float()
             total += labels.size(0)
@@ -239,12 +241,15 @@ for epoch in range(num_epochs):
     val_loss = running_loss / len(val_loader)
     val_accuracy = 100 * correct / total
     print(f"Epoch {epoch + 1}/{num_epochs}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy:.2f}%")
-
+    # Calculate ROC/AUC
+    fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+    roc_auc = roc_auc_score(true_labels, pred_probs)
+    print(f"Val AUC: {roc_auc:.4f}")
     # Write to TensorBoard
     writer.add_scalars("Loss", {"Train": train_loss, "Validation": val_loss}, epoch)
 
 # Save the model
-torch.save(model.state_dict(), f"models/pneumothorax_experiment_VGG16_12_epoch50_Adam_BCELoss_scheduler{epoch + 1}.pth")
+torch.save(model.state_dict(), f"models/VGG16_1.pth")
 
 # Test loop
 model.eval()
@@ -272,3 +277,20 @@ print(f"Test Loss: {test_loss:.4f}")
 print(f"Test Accuracy: {test_accuracy:.2f}%")
 
 
+# Calculate ROC/AUC
+fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+roc_auc = roc_auc_score(true_labels, pred_probs)
+print(f"Val AUC: {roc_auc:.4f}")
+
+# Plot ROC curve
+
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.show()
