@@ -54,12 +54,19 @@ def cam_show_img(img, feature_map, grads, out_dir):
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     print("heatmap.shape: ", heatmap.shape)
     cam_img = 0.3 * heatmap + 0.7 * img
-    path_cam_img = os.path.join(out_dir, "cam_normal.jpg")
+    path_cam_img = os.path.join(out_dir, "cam_pneumothorax_3.jpg")
     cv2.imwrite(path_cam_img, cam_img)
+
+
+test_transforms = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.Lambda(lambda x: adapthist_equalize(x)),
+    transforms.ToTensor(),
+])
 
 if __name__ == '__main__':
     #path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.3678.1517875178.953520.png' # pneumothorax
-    path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.4200.1517875181.692066.png' # 0
+    path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.4237.1517875181.859833.png' # 0
 
     json_path = 'labels.json'
     output_dir = '/home/ziruiqiu/comp691_DL/project/experiments/VGG16_1'
@@ -77,9 +84,8 @@ if __name__ == '__main__':
     grad_block = list()
 
     # 图片读取；网络加载
-    img = cv2.imread(path_img, 1)
-    #img = Image.open(path_img).convert("RGB")
-    img_input = img_preprocess(img)
+    img = Image.open(path_img).convert("RGB")
+    img_input = test_transforms(img)
 
     # 加载 squeezenet1_1 预训练模型
     net = models.vgg16(pretrained=True)
@@ -98,6 +104,7 @@ if __name__ == '__main__':
     net.features[-1].register_backward_hook(backward_hook)
 
     # forward
+    img_input = img_input.unsqueeze(0)
     print("input:", img_input.shape)
     output = net(img_input)
     print("output:",output)
@@ -107,6 +114,7 @@ if __name__ == '__main__':
     # backward
     net.zero_grad()
     class_loss = output[0,idx]
+    print("class_loss: ", class_loss)
     class_loss.backward()
 
     # 生成cam
@@ -114,4 +122,5 @@ if __name__ == '__main__':
     fmap = fmap_block[0].cpu().data.numpy().squeeze()
 
     # 保存cam图片
-    cam_show_img(img, fmap, grads_val, output_dir)
+    img_visualize = cv2.imread(path_img, 1)
+    cam_show_img(img_visualize, fmap, grads_val, output_dir)

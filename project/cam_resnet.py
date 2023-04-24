@@ -8,6 +8,8 @@ import json
 import torch.nn as nn
 from PIL import Image
 from skimage import exposure
+
+
 # 图片预处理
 def adapthist_equalize(img):
     img = np.array(img) # Convert PIL image to numpy array
@@ -28,18 +30,16 @@ def img_preprocess(img_in):
     img = transform(img)
     img = img.unsqueeze(0)					# 3
     return img
+test_transforms = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.Lambda(lambda x: adapthist_equalize(x)),
+    transforms.ToTensor(),
+])
 
 
-# 定义获取梯度的函数
-def backward_hook(module, grad_in, grad_out):
-    grad_block.append(grad_out[0].detach())
-
-# 定义获取特征图的函数
-def farward_hook(module, input, output):
-    fmap_block.append(output)
 
 # 计算grad-cam并可视化
-def cam_show_img(img, feature_map, grads, out_dir):
+def cam_show_img(img, feature_map, grads, out_dir,img_no):
     H, W, _ = img.shape
     cam = np.zeros(feature_map.shape[1:], dtype=np.float32)		# 4
     grads = grads.reshape([grads.shape[0],-1])					# 5
@@ -53,16 +53,23 @@ def cam_show_img(img, feature_map, grads, out_dir):
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     print("heatmap.shape: ", heatmap.shape)
     cam_img = 0.3 * heatmap + 0.7 * img
-    path_cam_img = os.path.join(out_dir, "cam_normal.jpg")
+    path_cam_img = os.path.join(out_dir, "cam_pneumothorax_"+img_no+".jpg")
     cv2.imwrite(path_cam_img, cam_img)
 
-if __name__ == '__main__':
-    #path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.3678.1517875178.953520.png' # pneumothorax
-    path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.4200.1517875181.692066.png' # 0
-    #path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.31861.1517875157.200473.png' # 0
+def grad_cam(img_no,net_no,network):
+#path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.3678.1517875178.953520.png' # pneumothorax
+    suffix = ''
+    if img_no == 1:
+        suffix = '593.1517875163.595805.png'
+    elif img_no == 2:
+        suffix = '2447.1517875172.804337.png'
+    elif img_no == 3:
+        suffix = '4237.1517875181.859833.png'
+    path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.' + suffix# pneumothorax 
+    #path_img = '/home/ziruiqiu/comp691_DL/project/input/1.2.276.0.7230010.3.1.4.8323329.4200.1517875181.692066.png' # 0
     json_path = 'labels.json'
-    output_dir = '/home/ziruiqiu/comp691_DL/project/experiments/Resnet18_1'
-
+    output_dir = '/home/ziruiqiu/comp691_DL/project/experiments/Resnet'+net_no+'_1'
+   
     with open(json_path, 'r') as load_f:
         load_json = json.load(load_f)
     classes = {int(key): value for (key, value)
@@ -74,23 +81,23 @@ if __name__ == '__main__':
     # 存放梯度和特征图
     fmap_block = list()
     grad_block = list()
+    # 定义获取梯度的函数
+    def backward_hook(module, grad_in, grad_out):
+        grad_block.append(grad_out[0].detach())
+
+    # 定义获取特征图的函数
+    def farward_hook(module, input, output):
+        fmap_block.append(output)
 
     # 图片读取；网络加载
-    img = cv2.imread(path_img, 1)
-    #img = Image.open(path_img).convert("RGB")
-    img_input = img_preprocess(img)
-
-    # 加载 squeezenet1_1 预训练模型
-    # net = models.vgg16(pretrained=True)
-    # num_features = net.classifier[6].in_features
-    # #net.classifier[6] = nn.Linear(num_features, 2)
-    # net.classifier[-1] = nn.Linear(in_features=4096, out_features=1, bias=True)
-    # net.classifier[-2] = nn.ReLU(inplace=False) # Add ReLU activation after the new linear layer
-    net = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
+    img = Image.open(path_img).convert("RGB")
+    img_input = test_transforms(img)
+    
+    net = torch.hub.load('pytorch/vision:v0.10.0', network, pretrained=True)
     num_ftrs = net.fc.in_features
     net.fc = nn.Linear(num_ftrs, 1)
     #pthfile = 'models/pneumothorax_experiment_VGG16_8_grad_cam_L2_1e-3_epoch20_20.pth'
-    pthfile = '/home/ziruiqiu/comp691_DL/project/models/resnet/resnet18_1.pth' #BCE
+    pthfile = '/home/ziruiqiu/comp691_DL/project/models/resnet/resnet'+net_no+'_1.pth' #BCE
     net.load_state_dict(torch.load(pthfile))
     net.eval()														# 8
     print(net)
@@ -100,6 +107,7 @@ if __name__ == '__main__':
     net._modules.get('layer4').register_backward_hook(backward_hook)
 
     # forward
+    img_input = img_input.unsqueeze(0)
     print("input:", img_input.shape)
     output = net(img_input)
     print("output:",output)
@@ -109,6 +117,7 @@ if __name__ == '__main__':
     # backward
     net.zero_grad()
     class_loss = output[0,idx]
+    print("class_loss: ", class_loss)
     class_loss.backward()
 
     # 生成cam
@@ -116,4 +125,13 @@ if __name__ == '__main__':
     fmap = fmap_block[0].cpu().data.numpy().squeeze()
 
     # 保存cam图片
-    cam_show_img(img, fmap, grads_val, output_dir)
+    img_visualize = cv2.imread(path_img, 1)
+    cam_show_img(img_visualize, fmap, grads_val, output_dir,str(img_no))
+
+if __name__ == '__main__':
+    network = 'resnet101'
+    net_no = '101'
+    img_no = 0
+    for i in range(3):
+        img_no += 1
+        grad_cam(img_no,net_no,network)
